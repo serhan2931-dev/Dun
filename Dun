@@ -1,14 +1,223 @@
--- [[ ECHO SCRIPTER V21 - FULL RESTORE + PERFORMANCE ]] --
+-- [[ ECHO SCRIPTER V22 - DEFINITIVE FULL BUILD ]] --
 
 local Flags = {
     AutoFarm = false, AutoWater = false, AutoBuy = false, AutoReplant = false,
     EventCollector = false, SpeedToggle = false, NoClip = false, FPSBoost = false, NightSteal = false
 }
 
--- [ ... (Keep all Logic/Automation Engines from V20) ... ]
--- [ I am ensuring the Button Generator maps all 9 items below ]
+local CustomSpeed = 45
+local NextEventEstimate = "Calibrating..."
 
-local function AddMenuButton(text, pos, flagKey, customCallback)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local Terrain = Workspace:FindFirstChildWhichIsA("Terrain")
+
+local Character, HRP
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    HRP = char:WaitForChild("HumanoidRootPart", 5)
+end)
+if LocalPlayer.Character then
+    Character = LocalPlayer.Character
+    HRP = Character:FindFirstChild("HumanoidRootPart")
+end
+
+-- --- HARDCORE PERFORMANCE ENHANCER ---
+local function ApplyFPSBoost()
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 9e9
+    Lighting.Brightness = 1
+    
+    for _, obj in ipairs(Lighting:GetChildren()) do
+        if obj:IsA("DepthOfFieldEffect") or obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("SunRaysEffect") then
+            obj.Enabled = false
+        end
+    end
+    
+    if Terrain then
+        Terrain.WaterWaveSize = 0
+        Terrain.WaterWaveSpeed = 0
+        Terrain.WaterReflectance = 0
+        Terrain.WaterDetail = Enum.WaterDetailSetting.Low
+    end
+
+    for _, v in ipairs(Workspace:GetDescendants()) do
+        if v:IsA("BasePart") and not v:IsA("MeshPart") then
+            v.Material = Enum.Material.SmoothPlastic
+            v.Reflectance = 0
+        elseif v:IsA("Texture") or v:IsA("Decal") then
+            v:Destroy()
+        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+            v.Enabled = false
+        end
+    end
+end
+
+-- --- LIGHTWEIGHT NIGHT & TIME MONITOR ---
+local function IsNight()
+    local clockTime = Lighting.ClockTime
+    return clockTime >= 18 or clockTime <= 6
+end
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            local serverTime = workspace.DistributedGameTime
+            local timeRemaining = 900 - (serverTime % 900)
+            NextEventEstimate = string.format("%02dm %02ds", math.floor(timeRemaining / 60), math.floor(timeRemaining % 60))
+        end)
+        task.wait(2)
+    end
+end)
+
+-- --- HIGH PERFORMANCE AUTOMATION CORE ---
+task.spawn(function()
+    while true do
+        -- 1. Night Stealer Loop
+        if Flags.NightSteal and IsNight() and HRP then
+            pcall(function()
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if string.find(string.lower(obj.Name), "plot") or string.find(string.lower(obj.Name), "garden") then
+                        for _, prompt in ipairs(obj:GetDescendants()) do
+                            if prompt:IsA("ProximityPrompt") and string.find(string.lower(prompt.Parent.Name), "harvest") then
+                                HRP.CFrame = prompt.Parent.CFrame * CFrame.new(0, 2, 0)
+                                task.wait(0.1)
+                                fireproximityprompt(prompt)
+                                task.wait(0.1)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        -- 2. Event Sniper Loop
+        if Flags.EventCollector and HRP then
+            pcall(function()
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if string.find(string.lower(obj.Name), "seed") or string.find(string.lower(obj.Name), "moon") then
+                        local target = obj:IsA("Model") and obj:GetModelCFrame() or obj.CFrame
+                        HRP.CFrame = target
+                        for _, p in ipairs(obj:GetDescendants()) do 
+                            if p:IsA("ProximityPrompt") then fireproximityprompt(p) end 
+                        end
+                        break
+                    end
+                end
+            end)
+        end
+
+        -- 3. Standard Auto Farm
+        if Flags.AutoFarm and not (Flags.NightSteal and IsNight()) then
+            pcall(function()
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if string.find(string.lower(obj.Name), "plot") or string.find(string.lower(obj.Name), "garden") then
+                        for _, prompt in ipairs(obj:GetDescendants()) do
+                            if prompt:IsA("ProximityPrompt") and string.find(string.lower(prompt.Parent.Name), "harvest") then
+                                fireproximityprompt(prompt)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        -- 4. Auto Water
+        if Flags.AutoWater then
+            pcall(function()
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if string.find(string.lower(obj.Name), "plot") or string.find(string.lower(obj.Name), "garden") then
+                        for _, prompt in ipairs(obj:GetDescendants()) do
+                            if prompt:IsA("ProximityPrompt") and string.find(string.lower(prompt.Name), "water") then
+                                fireproximityprompt(prompt)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        -- 5. Auto Replant
+        if Flags.AutoReplant then
+            pcall(function()
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if string.find(string.lower(obj.Name), "plot") or string.find(string.lower(obj.Name), "garden") then
+                        for _, prompt in ipairs(obj:GetDescendants()) do
+                            if prompt:IsA("ProximityPrompt") and string.find(string.lower(prompt.Name), "plant") then
+                                fireproximityprompt(prompt)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+        
+        task.wait(0.6)
+    end
+end)
+
+-- --- PHYSICAL MOVEMENT ENGINE ---
+game:GetService("RunService").Heartbeat:Connect(function()
+    pcall(function()
+        if Character and Character:FindFirstChild("Humanoid") then
+            if Flags.SpeedToggle then 
+                Character.Humanoid.WalkSpeed = CustomSpeed 
+            end
+            if Flags.NoClip then
+                for _, p in ipairs(Character:GetChildren()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
+                end
+            end
+        end
+    end)
+end)
+
+-- --- SCREEN INTEGRATION DISPLAY UI ---
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 420, 0, 280)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -140)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.Active = true
+
+local UIStroke = Instance.new("UIStroke", MainFrame)
+UIStroke.Thickness = 2
+task.spawn(function()
+    local hue = 0
+    game:GetService("RunService").RenderStepped:Connect(function()
+        hue = (hue + 1) % 360
+        UIStroke.Color = Color3.fromHSV(hue / 360, 0.8, 1)
+    end)
+end)
+
+local Scroll = Instance.new("ScrollingFrame", MainFrame)
+Scroll.Size = UDim2.new(0.92, 0, 0.72, 0)
+Scroll.Position = UDim2.new(0.04, 0, 0.14, 0)
+Scroll.CanvasSize = UDim2.new(0, 0, 3.4, 0)
+Scroll.BackgroundTransparency = 1
+Scroll.ScrollBarThickness = 4
+
+local Status = Instance.new("TextLabel", MainFrame)
+Status.Size = UDim2.new(0.9, 0, 0, 20)
+Status.Position = UDim2.new(0.05, 0, 0.9, 0)
+Status.BackgroundTransparency = 1
+Status.TextColor3 = Color3.fromRGB(200, 200, 200)
+Status.Font = Enum.Font.SourceSansItalic
+Status.TextSize = 13
+
+task.spawn(function()
+    while true do
+        local timeStatus = IsNight() and " [NIGHT ACTIVE]" or " [DAYTIME]"
+        Status.Text = "Next Moon Event: " .. NextEventEstimate .. timeStatus
+        task.wait(1)
+    end
+end)
+
+local function AddMenuButton(text, pos, flagKey, callback)
     local btn = Instance.new("TextButton", Scroll)
     btn.Size = UDim2.new(0.9, 0, 0, 42)
     btn.Position = pos
@@ -21,17 +230,26 @@ local function AddMenuButton(text, pos, flagKey, customCallback)
     btn.MouseButton1Down:Connect(function()
         Flags[flagKey] = not Flags[flagKey]
         btn.BackgroundColor3 = Flags[flagKey] and Color3.fromRGB(46, 139, 87) or Color3.fromRGB(45, 45, 45)
-        if customCallback and Flags[flagKey] then customCallback() end
+        if callback and Flags[flagKey] then callback() end
     end)
 end
 
--- ALL 9 OPTIONS RESTORED
-AddMenuButton("📈 FPS BOOST & GRAPHICS", UDim2.new(0.05, 0, 0, 0), "FPSBoost", ApplyFPSBoost)
-AddMenuButton("🌙 NIGHT STEALER", UDim2.new(0.05, 0, 0, 50), "NightSteal")
+-- GENERATE ALL 9 BUTTONS
+AddMenuButton("📈 FORCED FPS BOOST & LOW GRAPHICS", UDim2.new(0.05, 0, 0, 0), "FPSBoost", ApplyFPSBoost)
+AddMenuButton("🌙 NIGHT STEALER (AUTO)", UDim2.new(0.05, 0, 0, 50), "NightSteal")
 AddMenuButton("⚡ EVENT SNIPER", UDim2.new(0.05, 0, 0, 100), "EventCollector")
-AddMenuButton("🌾 AUTO HARVEST", UDim2.new(0.05, 0, 0, 150), "AutoFarm")
-AddMenuButton("💧 AUTO WATER", UDim2.new(0.05, 0, 0, 200), "AutoWater")
-AddMenuButton("🌱 AUTO REPLANT", UDim2.new(0.05, 0, 0, 250), "AutoReplant")
+AddMenuButton("🌾 AUTO HARVEST PLOT", UDim2.new(0.05, 0, 0, 150), "AutoFarm")
+AddMenuButton("💧 AUTO WATER PLANTS", UDim2.new(0.05, 0, 0, 200), "AutoWater")
+AddMenuButton("🌱 AUTO REPLANT SEEDS", UDim2.new(0.05, 0, 0, 250), "AutoReplant")
 AddMenuButton("🛒 AUTO BUY SEEDS", UDim2.new(0.05, 0, 0, 300), "AutoBuy")
-AddMenuButton("👟 SPEED HACK", UDim2.new(0.05, 0, 0, 350), "SpeedToggle")
+AddMenuButton("👟 SPEED HACK (45)", UDim2.new(0.05, 0, 0, 350), "SpeedToggle")
 AddMenuButton("🧱 NO-CLIP MODE", UDim2.new(0.05, 0, 0, 400), "NoClip")
+
+local ToggleButton = Instance.new("TextButton", ScreenGui)
+ToggleButton.Size = UDim2.new(0, 50, 0, 50)
+ToggleButton.Position = UDim2.new(0.02, 0, 0.4, 0)
+ToggleButton.Text = "ECHO"
+ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+ToggleButton.Font = Enum.Font.SourceSansBold
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(1, 0)
+ToggleButton.MouseButton1Down:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
